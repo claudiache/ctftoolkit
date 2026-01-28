@@ -36,18 +36,18 @@ def looks_like_caesar(text):
 # --- ROUTER ---
 
 def detect_tools(text):
-    detections = []
     tools = []
 
-    if re.fullmatch(r'(?:[0-9a-fA-F]{2})+', text.replace("\n", "")):
+    stripped = text.replace("\n", "").strip()
+
+    if re.fullmatch(r'(?:[0-9a-fA-F]{2})+', stripped):
         tools.append("hex")
 
-    b64_chars = r'[A-Za-z0-9+/=\n]+'
-    if re.fullmatch(b64_chars, text.strip()):
+    if looks_like_base64(text):
         tools.append("base64")
 
     if looks_like_caesar(text):
-        detections.append("caesar")
+        tools.append("caesar")
 
     return tools
 
@@ -71,14 +71,14 @@ def scan_file(filepath):
 
 def base64_decode(text):
     try:
-        if isinstance(text, str):
-            text_bytes = text.encode()
-        else:
-            text_bytes = text 
-
+        data = text.encode() if isinstance(text, str) else text 
         decoded_bytes = base64.b64decode(text_bytes, validate=True)
-        return decoded_bytes.decode(errors="ignore")
-    
+
+        if b'\x00' in decoded:
+            return decoded 
+
+        return decoded.decode(errors="ignore")
+        
     except Exception:
         return None 
     
@@ -171,9 +171,14 @@ def should_try_xor(text, threshold=15):
     return best_score - baseline > threshold
 
 def save_step(step_num, tool, content):
-    filename = f"step_{step_num}_{tool}.text"
-    with open(filename, "w", errors="ignore") as f:
+    ext = "bin" if isinstance(content, bytes) else "text"
+    filename = f"step_{step_num}_{tool}.{ext}"
+
+    mode = "wb" if isinstance(content, bytes) else "w"
+    
+    with open(filename, mode) as f:
         f.write(content)
+        
     print(f"[+] Saved output to {filename}")
 
 FLAG_PREFIXES = [
@@ -217,6 +222,11 @@ def run_pipeline(text, max_depth=5):
             if tool in DECODERS:
                 output = DECODERS[tool](current)
 
+                if isinstance(output, bytes):
+                    save_step(step, tool, output)
+                    print("[+] Binary output detected - stopping pipeline")
+                    return output
+
                 if output and output != current:
                     save_step(step, tool, output)
                     current = output
@@ -250,16 +260,12 @@ def run_pipeline(text, max_depth=5):
                 print("[-] Skipping XOR brute force - input too large")
                 break
 
-        if not progressed and should_try_xor(current):
-            print("[+] Trying XOR brute force as fallback")
-
-            results = xor_bruteforce(current)
-            if results:
-                best = results[0][2]
-                save_step(step, f"xor_key_{results[0][1]}", best)
-                current = best 
-                progressed = True 
-
+        if isinstance(current, str):
+            flags = flag_finder(current)
+            if flags:
+                print("[+] Flag detected - stopping pipeline")
+                break
+        
         if not progressed:
             print("[-] Pipeline stalled - stopping")
             break
@@ -281,4 +287,5 @@ def main():
     flag_finder(final_text)
 
 if __name__ == "__main__":
+
     main()
