@@ -23,11 +23,11 @@ def looks_like_base64(text):
 def looks_like_hex(text):
     text = text.replace(' ', '').replace('\n', '').strip()
 
-    return {
+    return (
         len(text) >= 4 and
         len(text) %2 == 0 and
         all(c in '0123456789abcdefABCDEF' for c in text)
-    }
+    )
 
 def looks_like_caesar(text):
     letters = sum(c.isalpha() for c in text)
@@ -72,12 +72,12 @@ def scan_file(filepath):
 def base64_decode(text):
     try:
         data = text.encode() if isinstance(text, str) else text 
-        decoded_bytes = base64.b64decode(text_bytes, validate=True)
+        decoded_bytes = base64.b64decode(data, validate=True)
 
-        if b'\x00' in decoded:
-            return decoded 
+        if b'\x00' in decoded_bytes:
+            return decoded_bytes 
 
-        return decoded.decode(errors="ignore")
+        return decoded_bytes.decode(errors="ignore")
         
     except Exception:
         return None 
